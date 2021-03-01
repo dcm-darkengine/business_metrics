@@ -9,10 +9,10 @@ import groovy.time.TimeDuration
 
 def serviceCallByStates() {
     String hqlServiceCallsByStates = '''
-    SELECT count(*)
-    FROM serviceCall sc
-    WHERE sc.state = :stateCode
-    '''
+SELECT count(*)
+FROM serviceCall sc
+WHERE sc.state = :stateCode
+'''
     def serviceCallByStates = [:]
 
     api.metainfo.getMetaClass('serviceCall').workflow.states.code.each { code ->
@@ -26,6 +26,7 @@ def serviceCallByStates() {
 
     return serviceCallByStates
 }
+
 def periodComments() {
     String hqlPeriodComments = '''
 SELECT count(comm)
@@ -45,6 +46,7 @@ AND em.id = comm.author.id
             .set('currentDate', currentDate)
             .list()[0]
 }
+
 def periodServiceCalls() {
     String hqlPeriodServiceCalls = '''
 SELECT 'serviceCall$'||sc.id, 'employee$'||sc.author.id, sc.requestDate, sc.registrationDate, sc.wayAddressing.code
@@ -68,11 +70,32 @@ WHERE sc.creationDate between :periodDate and :currentDate
     }
 }
 
+def periodAdminActions() {
+    String hqlPeriodAdminLogs = '''
+SELECT 'adminLogRecord$'||log.id, log.authorLogin, log.category
+FROM adminLogRecord log
+WHERE log.actionDate between :periodDate and :currentDate
+AND log.authorLogin is not 'naumen'
+'''
+
+    api.db.query(hqlPeriodAdminLogs)
+            .set('periodDate', periodDate)
+            .set('currentDate', currentDate)
+            .list().collect { row ->
+        return [
+                'UUID'    : row[0],
+                'author'  : row[1],
+                'category': row[2]
+        ]
+    }
+}
+
 def business_metrics = [
         'itsm365_comments_for_the_period'    : periodComments(),
         'itsm365_serviceCalls_for_the_period': periodServiceCalls(),
         'itsm365_license_usage_per_user'     : api.employee.getLicensesUsage(),
-        'itsm365_serviceCalls_per_states'    : serviceCallByStates()
+        'itsm365_serviceCalls_per_states'    : serviceCallByStates(),
+        'itsm365_admin_logs_for_the_period'  : periodAdminActions()
 ]
 
 return new JsonBuilder(business_metrics).toPrettyString()
