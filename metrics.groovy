@@ -9,6 +9,10 @@ import groovy.time.TimeCategory
 @Field Date currentDate = new Date()
 @Field Date periodDate = use(TimeCategory) { currentDate - 1.minute }
 
+def getHost() {
+    return api.rest.getBaseUrl() - 'https://' - 'http://' - '/sd' - '/operator'
+}
+
 def serviceCallByStates() {
     String hqlServiceCallsByStates = '''
 SELECT sc.state, count(sc)
@@ -18,8 +22,8 @@ GROUP BY sc.state
     return api.db.query(hqlServiceCallsByStates)
             .list().collect { row ->
         return [
-                'state' : row[0],
-                'amount': row[1]
+                'state': row[0],
+                'count': row[1]
         ]
     }
 }
@@ -40,7 +44,7 @@ AND comm.author is not null
                 return row.tokenize('$')[0]
             }
             .groupBy()
-            .collect { return ["class": it.key, "amount": it.value.size()] }
+            .collect { return ["class": it.key, "count": it.value.size()] }
 }
 
 def periodServiceCalls() {
@@ -57,8 +61,8 @@ WHERE sc.creationDate between :periodDate and :currentDate
         return [
                 'UUID'            : row[0],
                 'author'          : row[1],
-                'requestDate'     : row[2],
-                'registrationDate': row[3],
+                'requestDate'     : row[2].getTime(),
+                'registrationDate': row[3].getTime(),
                 'registrationTime': row[3].getTime() - row[2].getTime(),
                 'wayAddressing'   : row[4]
         ]
@@ -88,16 +92,19 @@ AND log.authorLogin is not 'naumen'
 def licenseUsage() {
     api.employee.getLicensesUsage().collect {
         return ["license": it.key,
-                "amount" : it.value]
+                "count"  : it.value]
     }
 }
 
 def business_metrics = [
-        'itsm365_comments_for_the_period'    : periodComments(),
-        'itsm365_serviceCalls_for_the_period': periodServiceCalls(),
-        'itsm365_license_usage_per_user'     : licenseUsage(),
-        'itsm365_serviceCalls_per_states'    : serviceCallByStates(),
-        'itsm365_admin_logs_for_the_period'  : periodAdminActions()
+        'host'                       : getHost(),
+        'date'                       : currentDate.getTime(),
+
+        'serviceCalls_for_the_period': periodServiceCalls(),
+        'serviceCalls_per_states'    : serviceCallByStates(),
+        'comments_for_the_period'    : periodComments(),
+        'license_usage_per_user'     : licenseUsage(),
+        'admin_logs_for_the_period'  : periodAdminActions()
 ]
 
 Gson gson = new GsonBuilder().setPrettyPrinting().create()
